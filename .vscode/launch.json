@@ -9,13 +9,10 @@
       "request": "launch",
       "name": "start",
       "runtimeExecutable": "yarn",
-      "runtimeArgs": ["start", "${file}"],
+      "runtimeArgs": ["run", "start", "./src/agents/${fileBasename}"],
       "sourceMaps": true,
       "cwd": "${workspaceRoot}/examples",
       "protocol": "inspector",
-      "env": {
-        "NODE_ENV": "development"
-      },
       "console": "integratedTerminal"
     }
   ]
