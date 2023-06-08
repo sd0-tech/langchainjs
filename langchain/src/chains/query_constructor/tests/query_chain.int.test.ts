@@ -1,5 +1,5 @@
 import { test } from "@jest/globals";
-import { loadQueryContstructorChain } from "../index.js";
+import { loadQueryConstructorChain } from "../index.js";
 import {
   Comparators,
   Comparison,
@@ -9,7 +9,7 @@ import {
 } from "../ir.js";
 import { OpenAI } from "../../../llms/openai.js";
 import { AttributeInfo } from "../../../schema/query_constructor.js";
-import { BasicTranslator } from "../../../retrievers/self_query/translator.js";
+import { BasicTranslator } from "../../../retrievers/self_query/base.js";
 
 test("Query Chain Test", async () => {
   const sq1 = new StructuredQuery(
@@ -77,7 +77,7 @@ test("Query Chain Test", async () => {
   const allowedComparators = Object.values(Comparators);
   const allowedOperators = Object.values(Operators);
   const llm = new OpenAI({ modelName: "gpt-3.5-turbo", temperature: 0 });
-  const queryChain = loadQueryContstructorChain({
+  const queryChain = loadQueryConstructorChain({
     llm,
     documentContents,
     attributeInfo,
