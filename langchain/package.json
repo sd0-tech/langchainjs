@@ -1,6 +1,6 @@
 {
   "name": "langchain",
-  "version": "0.0.102",
+  "version": "0.0.105",
   "description": "Typescript bindings for langchain",
   "type": "module",
   "engines": {
@@ -55,6 +55,9 @@
     "chains/load.cjs",
     "chains/load.js",
     "chains/load.d.ts",
+    "chains/openai_functions.cjs",
+    "chains/openai_functions.js",
+    "chains/openai_functions.d.ts",
     "chains/query_constructor.cjs",
     "chains/query_constructor.js",
     "chains/query_constructor.d.ts",
@@ -307,6 +310,9 @@
     "chat_models/googlevertexai.cjs",
     "chat_models/googlevertexai.js",
     "chat_models/googlevertexai.d.ts",
+    "chat_models/baiduwenxin.cjs",
+    "chat_models/baiduwenxin.js",
+    "chat_models/baiduwenxin.d.ts",
     "schema.cjs",
     "schema.js",
     "schema.d.ts",
@@ -510,7 +516,7 @@
     "apify-client": "^2.7.1",
     "axios": "^0.26.0",
     "cheerio": "^1.0.0-rc.12",
-    "chromadb": "^1.5.2",
+    "chromadb": "^1.5.3",
     "cohere-ai": "^5.0.2",
     "d3-dsv": "^2.0.0",
     "dotenv": "^16.0.3",
@@ -582,7 +588,7 @@
     "apify-client": "^2.7.1",
     "axios": "*",
     "cheerio": "^1.0.0-rc.12",
-    "chromadb": "^1.5.2",
+    "chromadb": "^1.5.3",
     "cohere-ai": "^5.0.2",
     "d3-dsv": "^2.0.0",
     "epub2": "^3.0.1",
@@ -781,7 +787,7 @@
     "js-tiktoken": "^1.0.7",
     "js-yaml": "^4.1.0",
     "jsonpointer": "^5.0.1",
-    "langchainplus-sdk": "^0.0.18",
+    "langchainplus-sdk": "^0.0.19",
     "ml-distance": "^4.0.0",
     "object-hash": "^3.0.0",
     "openai": "^3.3.0",
@@ -890,6 +896,11 @@
       "types": "./chains/load.d.ts",
       "import": "./chains/load.js",
       "require": "./chains/load.cjs"
+    },
+    "./chains/openai_functions": {
+      "types": "./chains/openai_functions.d.ts",
+      "import": "./chains/openai_functions.js",
+      "require": "./chains/openai_functions.cjs"
     },
     "./chains/query_constructor": {
       "types": "./chains/query_constructor.d.ts",
@@ -1320,6 +1331,11 @@
       "types": "./chat_models/googlevertexai.d.ts",
       "import": "./chat_models/googlevertexai.js",
       "require": "./chat_models/googlevertexai.cjs"
+    },
+    "./chat_models/baiduwenxin": {
+      "types": "./chat_models/baiduwenxin.d.ts",
+      "import": "./chat_models/baiduwenxin.js",
+      "require": "./chat_models/baiduwenxin.cjs"
     },
     "./schema": {
       "types": "./schema.d.ts",
