@@ -40,6 +40,7 @@ const entrypoints = {
   "embeddings/tensorflow": "embeddings/tensorflow",
   "embeddings/hf": "embeddings/hf",
   "embeddings/googlevertexai": "embeddings/googlevertexai",
+  "embeddings/googlepalm": "embeddings/googlepalm",
   // llms
   llms: "llms/index",
   "llms/load": "llms/load",
@@ -51,6 +52,7 @@ const entrypoints = {
   "llms/hf": "llms/hf",
   "llms/replicate": "llms/replicate",
   "llms/googlevertexai": "llms/googlevertexai",
+  "llms/googlepalm": "llms/googlepalm",
   "llms/sagemaker_endpoint": "llms/sagemaker_endpoint",
   // prompts
   prompts: "prompts/index",
@@ -118,12 +120,15 @@ const entrypoints = {
   "document_loaders/fs/csv": "document_loaders/fs/csv",
   "document_loaders/fs/notion": "document_loaders/fs/notion",
   "document_loaders/fs/unstructured": "document_loaders/fs/unstructured",
+  // document_transformers
+  "document_transformers/openai_functions": "document_transformers/openai_functions",
   // chat_models
   chat_models: "chat_models/index",
   "chat_models/base": "chat_models/base",
   "chat_models/openai": "chat_models/openai",
   "chat_models/anthropic": "chat_models/anthropic",
   "chat_models/googlevertexai": "chat_models/googlevertexai",
+  "chat_models/googlepalm": "chat_models/googlepalm",
   "chat_models/baiduwenxin": "chat_models/baiduwenxin",
   // schema
   schema: "schema/index",
@@ -170,6 +175,7 @@ const entrypoints = {
   "stores/message/dynamodb": "stores/message/dynamodb",
   "stores/message/momento": "stores/message/momento",
   "stores/message/redis": "stores/message/redis",
+  "stores/message/ioredis": "stores/message/ioredis",
   "stores/message/upstash_redis": "stores/message/upstash_redis",
   // experimental
   "experimental/autogpt": "experimental/autogpt/index",
@@ -208,11 +214,13 @@ const requiresOptionalDependency = [
   "chains/sql_db",
   "embeddings/cohere",
   "embeddings/googlevertexai",
+  "embeddings/googlepalm",
   "embeddings/tensorflow",
   "embeddings/hf",
   "llms/load",
   "llms/cohere",
   "llms/googlevertexai",
+  "llms/googlepalm",
   "llms/hf",
   "llms/replicate",
   "llms/sagemaker_endpoint",
@@ -264,6 +272,7 @@ const requiresOptionalDependency = [
   "document_loaders/fs/notion",
   "document_loaders/fs/unstructured",
   "chat_models/googlevertexai",
+  "chat_models/googlepalm",
   "sql_db",
   "retrievers/supabase",
   "retrievers/zep",
@@ -285,6 +294,7 @@ const requiresOptionalDependency = [
   "stores/message/dynamodb",
   "stores/message/momento",
   "stores/message/redis",
+  "stores/message/ioredis",
   "stores/message/upstash_redis",
 ];
 
@@ -305,7 +315,6 @@ const testExports = [
     (p) => `const ${p.replace(/\//g, "_")} = require("langchain/${p}");`,
   ],
   ["test-exports-cf", (p) => `export * from "langchain/${p}";`],
-  ["test-exports-cra", (p) => `export * from "langchain/${p}";`],
   ["test-exports-vercel", (p) => `export * from "langchain/${p}";`],
   ["test-exports-vite", (p) => `export * from "langchain/${p}";`],
 ];
