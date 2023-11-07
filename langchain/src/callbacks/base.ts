@@ -63,8 +63,10 @@ abstract class BaseCallbackHandlerMethodsClass {
     parentRunId?: string,
     extraParams?: Record<string, unknown>,
     tags?: string[],
-    metadata?: Record<string, unknown>
-  ): Promise<void> | void;
+    metadata?: Record<string, unknown>,
+    name?: string
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called when an LLM/ChatModel in `streaming` mode produces a new token
@@ -82,7 +84,8 @@ abstract class BaseCallbackHandlerMethodsClass {
     parentRunId?: string,
     tags?: string[],
     fields?: HandleLLMNewTokenCallbackFields
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called if an LLM/ChatModel run encounters an error
@@ -92,7 +95,8 @@ abstract class BaseCallbackHandlerMethodsClass {
     runId: string,
     parentRunId?: string,
     tags?: string[]
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called at the end of an LLM/ChatModel run, with the output and the run ID.
@@ -102,7 +106,8 @@ abstract class BaseCallbackHandlerMethodsClass {
     runId: string,
     parentRunId?: string,
     tags?: string[]
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called at the start of a Chat Model run, with the prompt(s)
@@ -115,8 +120,10 @@ abstract class BaseCallbackHandlerMethodsClass {
     parentRunId?: string,
     extraParams?: Record<string, unknown>,
     tags?: string[],
-    metadata?: Record<string, unknown>
-  ): Promise<void> | void;
+    metadata?: Record<string, unknown>,
+    name?: string
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called at the start of a Chain run, with the chain name and inputs
@@ -129,8 +136,10 @@ abstract class BaseCallbackHandlerMethodsClass {
     parentRunId?: string,
     tags?: string[],
     metadata?: Record<string, unknown>,
-    runType?: string
-  ): Promise<void> | void;
+    runType?: string,
+    name?: string
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called if a Chain run encounters an error
@@ -139,8 +148,10 @@ abstract class BaseCallbackHandlerMethodsClass {
     err: Error,
     runId: string,
     parentRunId?: string,
-    tags?: string[]
-  ): Promise<void> | void;
+    tags?: string[],
+    kwargs?: { inputs?: Record<string, unknown> }
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called at the end of a Chain run, with the outputs and the run ID.
@@ -149,8 +160,10 @@ abstract class BaseCallbackHandlerMethodsClass {
     outputs: ChainValues,
     runId: string,
     parentRunId?: string,
-    tags?: string[]
-  ): Promise<void> | void;
+    tags?: string[],
+    kwargs?: { inputs?: Record<string, unknown> }
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called at the start of a Tool run, with the tool name and input
@@ -162,8 +175,10 @@ abstract class BaseCallbackHandlerMethodsClass {
     runId: string,
     parentRunId?: string,
     tags?: string[],
-    metadata?: Record<string, unknown>
-  ): Promise<void> | void;
+    metadata?: Record<string, unknown>,
+    name?: string
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called if a Tool run encounters an error
@@ -173,7 +188,8 @@ abstract class BaseCallbackHandlerMethodsClass {
     runId: string,
     parentRunId?: string,
     tags?: string[]
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   /**
    * Called at the end of a Tool run, with the tool output and the run ID.
@@ -183,7 +199,8 @@ abstract class BaseCallbackHandlerMethodsClass {
     runId: string,
     parentRunId?: string,
     tags?: string[]
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   handleText?(
     text: string,
@@ -220,22 +237,26 @@ abstract class BaseCallbackHandlerMethodsClass {
     runId: string,
     parentRunId?: string,
     tags?: string[],
-    metadata?: Record<string, unknown>
-  ): Promise<void> | void;
+    metadata?: Record<string, unknown>,
+    name?: string
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   handleRetrieverEnd?(
     documents: Document[],
     runId: string,
     parentRunId?: string,
     tags?: string[]
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 
   handleRetrieverError?(
     err: Error,
     runId: string,
     parentRunId?: string,
     tags?: string[]
-  ): Promise<void> | void;
+  ): // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Promise<any> | any;
 }
 
 /**

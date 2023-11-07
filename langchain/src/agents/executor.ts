@@ -1,25 +1,50 @@
 import { BaseChain, ChainInputs } from "../chains/base.js";
-import { BaseMultiActionAgent, BaseSingleActionAgent } from "./agent.js";
+import {
+  BaseMultiActionAgent,
+  BaseSingleActionAgent,
+  RunnableAgent,
+} from "./agent.js";
 import { StoppingMethod } from "./types.js";
 import { SerializedLLMChain } from "../chains/serde.js";
 import {
   AgentAction,
   AgentFinish,
   AgentStep,
+  BaseMessage,
   ChainValues,
 } from "../schema/index.js";
 import { CallbackManagerForChainRun } from "../callbacks/manager.js";
 import { OutputParserException } from "../schema/output_parser.js";
-import { Tool, ToolInputParsingException } from "../tools/base.js";
+import {
+  StructuredTool,
+  Tool,
+  ToolInputParsingException,
+} from "../tools/base.js";
+import { Runnable } from "../schema/runnable/base.js";
+
+type ExtractToolType<T> = T extends { ToolType: infer Tool }
+  ? Tool
+  : StructuredTool;
 
 /**
  * Interface defining the structure of input data for creating an
  * AgentExecutor. It extends ChainInputs and includes additional
  * properties specific to agent execution.
  */
-export interface AgentExecutorInput extends ChainInputs {
-  agent: BaseSingleActionAgent | BaseMultiActionAgent;
-  tools: this["agent"]["ToolType"][];
+export interface AgentExecutorInput<
+  RunInput extends ChainValues & {
+    agent_scratchpad?: string | BaseMessage[];
+    stop?: string[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } = any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  RunOutput extends AgentAction | AgentFinish = any
+> extends ChainInputs {
+  agent:
+    | BaseSingleActionAgent
+    | BaseMultiActionAgent
+    | Runnable<RunInput, RunOutput>;
+  tools: ExtractToolType<this["agent"]>[];
   returnIntermediateSteps?: boolean;
   maxIterations?: number;
   earlyStoppingMethod?: StoppingMethod;
@@ -47,7 +72,15 @@ export class ExceptionTool extends Tool {
  * A chain managing an agent using tools.
  * @augments BaseChain
  */
-export class AgentExecutor extends BaseChain {
+export class AgentExecutor<
+  RunInput extends ChainValues & {
+    agent_scratchpad?: string | BaseMessage[];
+    stop?: string[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } = any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  RunOutput extends AgentAction | AgentFinish = any
+> extends BaseChain {
   static lc_name() {
     return "AgentExecutor";
   }
@@ -90,9 +123,16 @@ export class AgentExecutor extends BaseChain {
     return this.agent.returnValues;
   }
 
-  constructor(input: AgentExecutorInput) {
+  constructor(input: AgentExecutorInput<RunInput, RunOutput>) {
+    let agent: BaseSingleActionAgent | BaseMultiActionAgent;
+    if (Runnable.isRunnable(input.agent)) {
+      agent = new RunnableAgent({ runnable: input.agent });
+    } else {
+      agent = input.agent;
+    }
+
     super(input);
-    this.agent = input.agent;
+    this.agent = agent;
     this.tools = input.tools;
     this.handleParsingErrors =
       input.handleParsingErrors ?? this.handleParsingErrors;
@@ -113,7 +153,15 @@ export class AgentExecutor extends BaseChain {
   }
 
   /** Create from agent and a list of tools. */
-  static fromAgentAndTools(fields: AgentExecutorInput): AgentExecutor {
+  static fromAgentAndTools<
+    RunInput extends ChainValues & {
+      agent_scratchpad?: string | BaseMessage[];
+      stop?: string[];
+    },
+    RunOutput extends AgentAction | AgentFinish
+  >(
+    fields: AgentExecutorInput<RunInput, RunOutput>
+  ): AgentExecutor<RunInput, RunOutput> {
     return new AgentExecutor(fields);
   }
 
@@ -157,8 +205,14 @@ export class AgentExecutor extends BaseChain {
         // eslint-disable-next-line no-instanceof/no-instanceof
         if (e instanceof OutputParserException) {
           let observation;
+          let text = e.message;
           if (this.handleParsingErrors === true) {
-            observation = "Invalid or incomplete response";
+            if (e.sendToLLM) {
+              observation = e.observation;
+              text = e.llmOutput ?? "";
+            } else {
+              observation = "Invalid or incomplete response";
+            }
           } else if (typeof this.handleParsingErrors === "string") {
             observation = this.handleParsingErrors;
           } else if (typeof this.handleParsingErrors === "function") {
@@ -169,8 +223,8 @@ export class AgentExecutor extends BaseChain {
           output = {
             tool: "_Exception",
             toolInput: observation,
-            log: e.message,
-          };
+            log: text,
+          } as AgentAction;
         } else {
           throw e;
         }

@@ -1,19 +1,25 @@
+/* eslint-disable no-process-env */
 import * as uuid from "uuid";
 import flatten from "flat";
 
-import { VectorStore } from "./base.js";
+import {
+  RecordMetadata,
+  PineconeRecord,
+  Index as PineconeIndex,
+} from "@pinecone-database/pinecone";
+
+import { MaxMarginalRelevanceSearchOptions, VectorStore } from "./base.js";
 import { Embeddings } from "../embeddings/base.js";
 import { Document } from "../document.js";
+import { AsyncCaller, AsyncCallerParams } from "../util/async_caller.js";
+import { maximalMarginalRelevance } from "../util/math.js";
+import { chunkArray } from "../util/chunk.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-types, @typescript-eslint/no-explicit-any
 type PineconeMetadata = Record<string, any>;
 
-type VectorOperationsApi = ReturnType<
-  import("@pinecone-database/pinecone").PineconeClient["Index"]
->;
-
-export interface PineconeLibArgs {
-  pineconeIndex: VectorOperationsApi;
+export interface PineconeLibArgs extends AsyncCallerParams {
+  pineconeIndex: PineconeIndex;
   textKey?: string;
   namespace?: string;
   filter?: PineconeMetadata;
@@ -40,9 +46,11 @@ export class PineconeStore extends VectorStore {
 
   namespace?: string;
 
-  pineconeIndex: VectorOperationsApi;
+  pineconeIndex: PineconeIndex;
 
   filter?: PineconeMetadata;
+
+  caller: AsyncCaller;
 
   _vectorstoreType(): string {
     return "pinecone";
@@ -52,10 +60,13 @@ export class PineconeStore extends VectorStore {
     super(embeddings, args);
 
     this.embeddings = embeddings;
-    this.namespace = args.namespace;
-    this.pineconeIndex = args.pineconeIndex;
-    this.textKey = args.textKey ?? "text";
-    this.filter = args.filter;
+    const { namespace, pineconeIndex, textKey, filter, ...asyncCallerArgs } =
+      args;
+    this.namespace = namespace;
+    this.pineconeIndex = pineconeIndex;
+    this.textKey = textKey ?? "text";
+    this.filter = filter;
+    this.caller = new AsyncCaller(asyncCallerArgs);
   }
 
   /**
@@ -128,20 +139,19 @@ export class PineconeStore extends VectorStore {
         id: documentIds[idx],
         metadata,
         values,
-      };
+      } as PineconeRecord<RecordMetadata>;
     });
 
+    const namespace = this.pineconeIndex.namespace(this.namespace ?? "");
     // Pinecone recommends a limit of 100 vectors per upsert request
-    const chunkSize = 50;
-    for (let i = 0; i < pineconeVectors.length; i += chunkSize) {
-      const chunk = pineconeVectors.slice(i, i + chunkSize);
-      await this.pineconeIndex.upsert({
-        upsertRequest: {
-          vectors: chunk,
-          namespace: this.namespace,
-        },
-      });
-    }
+    const chunkSize = 100;
+    const chunkedVectors = chunkArray(pineconeVectors, chunkSize);
+    const batchRequests = chunkedVectors.map((chunk) =>
+      this.caller.call(async () => namespace.upsert(chunk))
+    );
+
+    await Promise.all(batchRequests);
+
     return documentIds;
   }
 
@@ -151,26 +161,43 @@ export class PineconeStore extends VectorStore {
    * @returns Promise that resolves when the delete operation is complete.
    */
   async delete(params: PineconeDeleteParams): Promise<void> {
-    const { namespace = this.namespace, deleteAll, ids, ...rest } = params;
+    const { deleteAll, ids } = params;
+    const namespace = this.pineconeIndex.namespace(this.namespace ?? "");
+
     if (deleteAll) {
-      await this.pineconeIndex.delete1({
-        deleteAll: true,
-        namespace,
-        ...rest,
-      });
+      await namespace.deleteAll();
     } else if (ids) {
       const batchSize = 1000;
       for (let i = 0; i < ids.length; i += batchSize) {
         const batchIds = ids.slice(i, i + batchSize);
-        await this.pineconeIndex.delete1({
-          ids: batchIds,
-          namespace,
-          ...rest,
-        });
+        await namespace.deleteMany(batchIds);
       }
     } else {
       throw new Error("Either ids or delete_all must be provided.");
     }
+  }
+
+  protected async _runPineconeQuery(
+    query: number[],
+    k: number,
+    filter?: PineconeMetadata,
+    options?: { includeValues: boolean }
+  ) {
+    if (filter && this.filter) {
+      throw new Error("cannot provide both `filter` and `this.filter`");
+    }
+    const _filter = filter ?? this.filter;
+    const namespace = this.pineconeIndex.namespace(this.namespace ?? "");
+
+    const results = await namespace.query({
+      includeMetadata: true,
+      topK: k,
+      vector: query,
+      filter: _filter,
+      ...options,
+    });
+
+    return results;
   }
 
   /**
@@ -186,20 +213,7 @@ export class PineconeStore extends VectorStore {
     k: number,
     filter?: PineconeMetadata
   ): Promise<[Document, number][]> {
-    if (filter && this.filter) {
-      throw new Error("cannot provide both `filter` and `this.filter`");
-    }
-    const _filter = filter ?? this.filter;
-    const results = await this.pineconeIndex.query({
-      queryRequest: {
-        includeMetadata: true,
-        namespace: this.namespace,
-        topK: k,
-        vector: query,
-        filter: _filter,
-      },
-    });
-
+    const results = await this._runPineconeQuery(query, k, filter);
     const result: [Document, number][] = [];
 
     if (results.matches) {
@@ -213,6 +227,57 @@ export class PineconeStore extends VectorStore {
     }
 
     return result;
+  }
+
+  /**
+   * Return documents selected using the maximal marginal relevance.
+   * Maximal marginal relevance optimizes for similarity to the query AND diversity
+   * among selected documents.
+   *
+   * @param {string} query - Text to look up documents similar to.
+   * @param {number} options.k - Number of documents to return.
+   * @param {number} options.fetchK=20 - Number of documents to fetch before passing to the MMR algorithm.
+   * @param {number} options.lambda=0.5 - Number between 0 and 1 that determines the degree of diversity among the results,
+   *                 where 0 corresponds to maximum diversity and 1 to minimum diversity.
+   * @param {PineconeMetadata} options.filter - Optional filter to apply to the search.
+   *
+   * @returns {Promise<Document[]>} - List of documents selected by maximal marginal relevance.
+   */
+  async maxMarginalRelevanceSearch(
+    query: string,
+    options: MaxMarginalRelevanceSearchOptions<this["FilterType"]>
+  ): Promise<Document[]> {
+    const queryEmbedding = await this.embeddings.embedQuery(query);
+
+    const results = await this._runPineconeQuery(
+      queryEmbedding,
+      options.fetchK ?? 20,
+      options.filter,
+      { includeValues: true }
+    );
+
+    const matches = results?.matches ?? [];
+    const embeddingList = matches.map((match) => match.values);
+
+    const mmrIndexes = maximalMarginalRelevance(
+      queryEmbedding,
+      embeddingList,
+      options.lambda,
+      options.k
+    );
+
+    const topMmrMatches = mmrIndexes.map((idx) => matches[idx]);
+
+    const finalResult: Document[] = [];
+    for (const res of topMmrMatches) {
+      const { [this.textKey]: pageContent, ...metadata } = (res.metadata ??
+        {}) as PineconeMetadata;
+      if (res.score) {
+        finalResult.push(new Document({ metadata, pageContent }));
+      }
+    }
+
+    return finalResult;
   }
 
   /**
@@ -230,10 +295,7 @@ export class PineconeStore extends VectorStore {
     embeddings: Embeddings,
     dbConfig:
       | {
-          /**
-           * @deprecated Use pineconeIndex instead
-           */
-          pineconeClient: VectorOperationsApi;
+          pineconeIndex: PineconeIndex;
           textKey?: string;
           namespace?: string | undefined;
         }
@@ -250,10 +312,7 @@ export class PineconeStore extends VectorStore {
     }
 
     const args: PineconeLibArgs = {
-      pineconeIndex:
-        "pineconeIndex" in dbConfig
-          ? dbConfig.pineconeIndex
-          : dbConfig.pineconeClient,
+      pineconeIndex: dbConfig.pineconeIndex,
       textKey: dbConfig.textKey,
       namespace: dbConfig.namespace,
     };

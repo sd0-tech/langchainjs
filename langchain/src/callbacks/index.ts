@@ -1,13 +1,15 @@
 export {
   BaseCallbackHandler,
-  CallbackHandlerMethods,
-  BaseCallbackHandlerInput,
-  NewTokenIndices,
+  type CallbackHandlerMethods,
+  type BaseCallbackHandlerInput,
+  type NewTokenIndices,
 } from "./base.js";
 
-export { Run, RunType, BaseTracer } from "./handlers/tracer.js";
+export { type Run, type RunType, BaseTracer } from "./handlers/tracer.js";
 
 export { ConsoleCallbackHandler } from "./handlers/console.js";
+
+export { RunCollectorCallbackHandler } from "./handlers/run_collector.js";
 
 export { LangChainTracer } from "./handlers/tracer_langchain.js";
 
@@ -24,8 +26,9 @@ export {
   CallbackManagerForChainRun,
   CallbackManagerForLLMRun,
   CallbackManagerForToolRun,
-  CallbackManagerOptions,
-  Callbacks,
+  type CallbackManagerOptions,
+  type Callbacks,
+  type BaseCallbackConfig,
   TraceGroup,
   traceAsGroup,
 } from "./manager.js";

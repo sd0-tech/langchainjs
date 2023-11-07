@@ -4,8 +4,14 @@ import {
   Generation,
   ChatGeneration,
   BaseMessage,
+  isBaseMessage,
+  isBaseMessageChunk,
+  ChatGenerationChunk,
+  GenerationChunk,
 } from "./index.js";
-import { Runnable, RunnableConfig } from "./runnable.js";
+import { Runnable } from "./runnable/index.js";
+import { RunnableConfig } from "./runnable/config.js";
+import { deepCompareStrict } from "../util/@cfworker/json-schema/index.js";
 
 /**
  * Options for formatting instructions.
@@ -138,7 +144,7 @@ export abstract class BaseOutputParser<
 export abstract class BaseTransformOutputParser<
   T = unknown
 > extends BaseOutputParser<T> {
-  async *_transform(
+  protected async *_transform(
     inputGenerator: AsyncGenerator<string | BaseMessage>
   ): AsyncGenerator<T> {
     for await (const chunk of inputGenerator) {
@@ -161,10 +167,82 @@ export abstract class BaseTransformOutputParser<
     inputGenerator: AsyncGenerator<string | BaseMessage>,
     options: BaseCallbackConfig
   ): AsyncGenerator<T> {
-    yield* this._streamWithConfig(this._transform(inputGenerator), {
-      ...options,
-      runType: "parser",
-    });
+    yield* this._transformStreamWithConfig(
+      inputGenerator,
+      this._transform.bind(this),
+      {
+        ...options,
+        runType: "parser",
+      }
+    );
+  }
+}
+
+export type BaseCumulativeTransformOutputParserInput = { diff?: boolean };
+
+/**
+ * A base class for output parsers that can handle streaming input. It
+ * extends the `BaseTransformOutputParser` class and provides a method for
+ * converting parsed outputs into a diff format.
+ */
+export abstract class BaseCumulativeTransformOutputParser<
+  T = unknown
+> extends BaseTransformOutputParser<T> {
+  protected diff = false;
+
+  constructor(fields?: BaseCumulativeTransformOutputParserInput) {
+    super(fields);
+    this.diff = fields?.diff ?? this.diff;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  protected abstract _diff(prev: any | undefined, next: any): any;
+
+  abstract parsePartialResult(
+    generations: Generation[] | ChatGeneration[]
+  ): Promise<T | undefined>;
+
+  protected async *_transform(
+    inputGenerator: AsyncGenerator<string | BaseMessage>
+  ): AsyncGenerator<T> {
+    let prevParsed: T | undefined;
+    let accGen: GenerationChunk | undefined;
+    for await (const chunk of inputGenerator) {
+      let chunkGen: GenerationChunk;
+      if (isBaseMessageChunk(chunk)) {
+        chunkGen = new ChatGenerationChunk({
+          message: chunk,
+          text: chunk.content,
+        });
+      } else if (isBaseMessage(chunk)) {
+        chunkGen = new ChatGenerationChunk({
+          message: chunk.toChunk(),
+          text: chunk.content,
+        });
+      } else {
+        chunkGen = new GenerationChunk({ text: chunk });
+      }
+
+      if (accGen === undefined) {
+        accGen = chunkGen;
+      } else {
+        accGen = accGen.concat(chunkGen);
+      }
+
+      const parsed = await this.parsePartialResult([accGen]);
+      if (
+        parsed !== undefined &&
+        parsed !== null &&
+        !deepCompareStrict(parsed, prevParsed)
+      ) {
+        if (this.diff) {
+          yield this._diff(prevParsed, parsed);
+        } else {
+          yield parsed;
+        }
+        prevParsed = parsed;
+      }
+    }
   }
 }
 
@@ -222,15 +300,47 @@ export class BytesOutputParser extends BaseTransformOutputParser<Uint8Array> {
 }
 
 /**
- * Custom error class used to handle exceptions related to output parsing.
- * It extends the built-in `Error` class and adds an optional `output`
- * property that can hold the output that caused the exception.
+ * Exception that output parsers should raise to signify a parsing error.
+ *
+ * This exists to differentiate parsing errors from other code or execution errors
+ * that also may arise inside the output parser. OutputParserExceptions will be
+ * available to catch and handle in ways to fix the parsing error, while other
+ * errors will be raised.
+ *
+ * @param message - The error that's being re-raised or an error message.
+ * @param llmOutput - String model output which is error-ing.
+ * @param observation - String explanation of error which can be passed to a
+ *     model to try and remediate the issue.
+ * @param sendToLLM - Whether to send the observation and llm_output back to an Agent
+ *     after an OutputParserException has been raised. This gives the underlying
+ *     model driving the agent the context that the previous output was improperly
+ *     structured, in the hopes that it will update the output to the correct
+ *     format.
  */
 export class OutputParserException extends Error {
-  output?: string;
+  llmOutput?: string;
 
-  constructor(message: string, output?: string) {
+  observation?: string;
+
+  sendToLLM: boolean;
+
+  constructor(
+    message: string,
+    llmOutput?: string,
+    observation?: string,
+    sendToLLM = false
+  ) {
     super(message);
-    this.output = output;
+    this.llmOutput = llmOutput;
+    this.observation = observation;
+    this.sendToLLM = sendToLLM;
+
+    if (sendToLLM) {
+      if (observation === undefined || llmOutput === undefined) {
+        throw new Error(
+          "Arguments 'observation' & 'llmOutput' are required if 'sendToLlm' is true"
+        );
+      }
+    }
   }
 }

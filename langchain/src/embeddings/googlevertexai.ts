@@ -1,7 +1,9 @@
+import { GoogleAuth, GoogleAuthOptions } from "google-auth-library";
 import { Embeddings, EmbeddingsParams } from "./base.js";
 import {
   GoogleVertexAIBasePrediction,
   GoogleVertexAIBaseLLMInput,
+  GoogleVertexAILLMPredictions,
 } from "../types/googlevertexai-types.js";
 import { GoogleVertexAILLMConnection } from "../util/googlevertexai-connection.js";
 import { AsyncCallerCallOptions } from "../util/async_caller.js";
@@ -14,7 +16,7 @@ import { chunkArray } from "../util/chunk.js";
  */
 export interface GoogleVertexAIEmbeddingsParams
   extends EmbeddingsParams,
-    GoogleVertexAIBaseLLMInput {}
+    GoogleVertexAIBaseLLMInput<GoogleAuthOptions> {}
 
 /**
  * Defines additional options specific to the
@@ -68,7 +70,8 @@ export class GoogleVertexAIEmbeddings
   private connection: GoogleVertexAILLMConnection<
     GoogleVertexAILLMEmbeddingsOptions,
     GoogleVertexAILLMEmbeddingsInstance,
-    GoogleVertexEmbeddingsResults
+    GoogleVertexEmbeddingsResults,
+    GoogleAuthOptions
   >;
 
   constructor(fields?: GoogleVertexAIEmbeddingsParams) {
@@ -78,7 +81,11 @@ export class GoogleVertexAIEmbeddings
 
     this.connection = new GoogleVertexAILLMConnection(
       { ...fields, ...this },
-      this.caller
+      this.caller,
+      new GoogleAuth({
+        scopes: "https://www.googleapis.com/auth/cloud-platform",
+        ...fields?.authOptions,
+      })
     );
   }
 
@@ -108,9 +115,9 @@ export class GoogleVertexAIEmbeddings
       responses
         ?.map(
           (response) =>
-            response.data?.predictions?.map(
-              (result) => result.embeddings.values
-            ) ?? []
+            (
+              response?.data as GoogleVertexAILLMPredictions<GoogleVertexEmbeddingsResults>
+            )?.predictions?.map((result) => result.embeddings.values) ?? []
         )
         .flat() ?? [];
     return result;

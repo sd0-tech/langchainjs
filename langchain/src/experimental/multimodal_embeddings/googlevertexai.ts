@@ -1,10 +1,14 @@
+import { GoogleAuth, GoogleAuthOptions } from "google-auth-library";
 import { Embeddings, EmbeddingsParams } from "../../embeddings/base.js";
 import {
   GoogleVertexAIBaseLLMInput,
   GoogleVertexAIBasePrediction,
-  GoogleVertexAILLMResponse,
+  GoogleVertexAILLMPredictions,
 } from "../../types/googlevertexai-types.js";
-import { GoogleVertexAILLMConnection } from "../../util/googlevertexai-connection.js";
+import {
+  GoogleVertexAILLMConnection,
+  GoogleVertexAILLMResponse,
+} from "../../util/googlevertexai-connection.js";
 import { AsyncCallerCallOptions } from "../../util/async_caller.js";
 
 /**
@@ -13,7 +17,7 @@ import { AsyncCallerCallOptions } from "../../util/async_caller.js";
  */
 export interface GoogleVertexAIMultimodalEmbeddingsParams
   extends EmbeddingsParams,
-    GoogleVertexAIBaseLLMInput {}
+    GoogleVertexAIBaseLLMInput<GoogleAuthOptions> {}
 
 /**
  * Options for the GoogleVertexAIMultimodalEmbeddings class, extending
@@ -75,7 +79,8 @@ export class GoogleVertexAIMultimodalEmbeddings
   private connection: GoogleVertexAILLMConnection<
     GoogleVertexAIMultimodalEmbeddingsOptions,
     GoogleVertexAIMultimodalEmbeddingsInstance,
-    GoogleVertexAIMultimodalEmbeddingsResults
+    GoogleVertexAIMultimodalEmbeddingsResults,
+    GoogleAuthOptions
   >;
 
   constructor(fields?: GoogleVertexAIMultimodalEmbeddingsParams) {
@@ -85,7 +90,11 @@ export class GoogleVertexAIMultimodalEmbeddings
 
     this.connection = new GoogleVertexAILLMConnection(
       { ...fields, ...this },
-      this.caller
+      this.caller,
+      new GoogleAuth({
+        scopes: "https://www.googleapis.com/auth/cloud-platform",
+        ...fields?.authOptions,
+      })
     );
   }
 
@@ -121,7 +130,9 @@ export class GoogleVertexAIMultimodalEmbeddings
   responseToEmbeddings(
     response: GoogleVertexAILLMResponse<GoogleVertexAIMultimodalEmbeddingsResults>
   ): MediaEmbeddings[] {
-    return response.data.predictions.map((r) => ({
+    return (
+      response?.data as GoogleVertexAILLMPredictions<GoogleVertexAIMultimodalEmbeddingsResults>
+    ).predictions.map((r) => ({
       text: r.textEmbedding,
       image: r.imageEmbedding,
     }));

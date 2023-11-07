@@ -14,6 +14,8 @@ module.exports = {
   plugins: ["@typescript-eslint", "no-instanceof"],
   ignorePatterns: [
     "src/util/@cfworker",
+    "src/util/fast-json-patch",
+    "src/util/js-sha1",
     ".eslintrc.cjs",
     "scripts",
     "node_modules",
