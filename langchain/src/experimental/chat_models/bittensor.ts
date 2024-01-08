@@ -1,10 +1,9 @@
-import { BaseChatModel, BaseChatModelParams } from "../../chat_models/base.js";
+import { BaseMessage, ChatMessage } from "@langchain/core/messages";
+import { ChatResult, ChatGeneration } from "@langchain/core/outputs";
 import {
-  BaseMessage,
-  ChatMessage,
-  ChatResult,
-  ChatGeneration,
-} from "../../schema/index.js";
+  BaseChatModel,
+  BaseChatModelParams,
+} from "@langchain/core/language_models/chat_models";
 
 export interface BittensorInput extends BaseChatModelParams {
   systemPrompt?: string | null | undefined;
@@ -89,10 +88,15 @@ export class NIBittensorChatModel
     const res = await chat.call([message]);
    */
   async _generate(messages: BaseMessage[]): Promise<ChatResult> {
-    const processed_messages = messages.map((message) => ({
-      role: this.messageToOpenAIRole(message),
-      content: message.content,
-    }));
+    const processed_messages = messages.map((message) => {
+      if (typeof message.content !== "string") {
+        throw new Error("NIBittensorChat does not support non-string output.");
+      }
+      return {
+        role: this.messageToOpenAIRole(message),
+        content: message.content,
+      };
+    });
     const generations: ChatGeneration[] = [];
 
     try {

@@ -1,28 +1,9 @@
-export interface DocumentInput<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Metadata extends Record<string, any> = Record<string, any>
-> {
-  pageContent: string;
+import { logVersion010MigrationWarning } from "./util/entrypoint_deprecation.js";
 
-  metadata?: Metadata;
-}
+/* #__PURE__ */ logVersion010MigrationWarning({
+  oldEntrypointName: "document",
+  newEntrypointName: "documents",
+  newPackageName: "@langchain/core",
+});
 
-/**
- * Interface for interacting with a document.
- */
-export class Document<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Metadata extends Record<string, any> = Record<string, any>
-> implements DocumentInput
-{
-  pageContent: string;
-
-  metadata: Metadata;
-
-  constructor(fields: DocumentInput<Metadata>) {
-    this.pageContent = fields.pageContent
-      ? fields.pageContent.toString()
-      : this.pageContent;
-    this.metadata = fields.metadata ?? ({} as Metadata);
-  }
-}
+export { type DocumentInput, Document } from "@langchain/core/documents";

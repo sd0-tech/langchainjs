@@ -1,16 +1,16 @@
-import { BaseLanguageModel } from "../base_language/index.js";
-import { CallbackManager, Callbacks } from "../callbacks/manager.js";
+import type {
+  StructuredToolInterface,
+  ToolInterface,
+} from "@langchain/core/tools";
+import type { BaseLanguageModelInterface } from "@langchain/core/language_models/base";
+import { CallbackManager, Callbacks } from "@langchain/core/callbacks/manager";
+import { BasePromptTemplate } from "@langchain/core/prompts";
+import { AgentAction, AgentFinish, AgentStep } from "@langchain/core/agents";
+import { BaseMessage } from "@langchain/core/messages";
+import { ChainValues } from "@langchain/core/utils/types";
+import { Serializable } from "@langchain/core/load/serializable";
+import { Runnable } from "@langchain/core/runnables";
 import { LLMChain } from "../chains/llm_chain.js";
-import { BasePromptTemplate } from "../prompts/base.js";
-import {
-  AgentAction,
-  AgentFinish,
-  AgentStep,
-  BaseMessage,
-  ChainValues,
-} from "../schema/index.js";
-import { Serializable } from "../load/serializable.js";
-import { StructuredTool, Tool } from "../tools/base.js";
 import {
   AgentActionOutputParser,
   AgentInput,
@@ -18,7 +18,6 @@ import {
   SerializedAgent,
   StoppingMethod,
 } from "./types.js";
-import { Runnable } from "../schema/runnable/base.js";
 
 /**
  * Record type for arguments passed to output parsers.
@@ -44,7 +43,7 @@ class ParseError extends Error {
  * functionality for agents, such as handling inputs and outputs.
  */
 export abstract class BaseAgent extends Serializable {
-  declare ToolType: StructuredTool;
+  declare ToolType: StructuredToolInterface;
 
   abstract get inputKeys(): string[];
 
@@ -125,52 +124,6 @@ export abstract class BaseSingleActionAgent extends BaseAgent {
 }
 
 /**
- * Class representing a single action agent which accepts runnables.
- * Extends the BaseSingleActionAgent class and provides methods for
- * planning agent actions with runnables.
- */
-export class RunnableAgent<
-  RunInput extends ChainValues & {
-    agent_scratchpad?: string | BaseMessage[];
-    stop?: string[];
-  },
-  RunOutput extends AgentAction | AgentFinish
-> extends BaseSingleActionAgent {
-  protected lc_runnable = true;
-
-  lc_namespace = ["langchain", "agents", "runnable"];
-
-  runnable: Runnable<RunInput, RunOutput>;
-
-  stop?: string[];
-
-  get inputKeys(): string[] {
-    return [];
-  }
-
-  constructor(fields: RunnableAgentInput<RunInput, RunOutput>) {
-    super();
-    this.runnable = fields.runnable;
-    this.stop = fields.stop;
-  }
-
-  async plan(
-    steps: AgentStep[],
-    inputs: RunInput,
-    callbackManager?: CallbackManager
-  ): Promise<AgentAction | AgentFinish> {
-    const invokeInput = { ...inputs, steps };
-
-    const output = await this.runnable.invoke(invokeInput, {
-      callbacks: callbackManager,
-      runName: "RunnableAgent",
-    });
-
-    return output;
-  }
-}
-
-/**
  * Abstract base class for multi-action agents in LangChain. Extends the
  * BaseAgent class and provides additional functionality specific to
  * multi-action agents.
@@ -196,6 +149,58 @@ export abstract class BaseMultiActionAgent extends BaseAgent {
   ): Promise<AgentAction[] | AgentFinish>;
 }
 
+function isAgentAction(input: unknown): input is AgentAction {
+  return !Array.isArray(input) && (input as AgentAction)?.tool !== undefined;
+}
+
+/**
+ * Class representing a single action agent which accepts runnables.
+ * Extends the BaseSingleActionAgent class and provides methods for
+ * planning agent actions with runnables.
+ */
+export class RunnableAgent extends BaseMultiActionAgent {
+  protected lc_runnable = true;
+
+  lc_namespace = ["langchain", "agents", "runnable"];
+
+  // TODO: Rename input to "intermediate_steps"
+  runnable: Runnable<
+    ChainValues & { steps: AgentStep[] },
+    AgentAction[] | AgentAction | AgentFinish
+  >;
+
+  stop?: string[];
+
+  get inputKeys(): string[] {
+    return [];
+  }
+
+  constructor(fields: RunnableAgentInput) {
+    super();
+    this.runnable = fields.runnable;
+    this.stop = fields.stop;
+  }
+
+  async plan(
+    steps: AgentStep[],
+    inputs: ChainValues,
+    callbackManager?: CallbackManager
+  ): Promise<AgentAction[] | AgentFinish> {
+    const invokeInput = { ...inputs, steps };
+
+    const output = await this.runnable.invoke(invokeInput, {
+      callbacks: callbackManager,
+      runName: "RunnableAgent",
+    });
+
+    if (isAgentAction(output)) {
+      return [output];
+    }
+
+    return output;
+  }
+}
+
 /**
  * Interface for input data for creating a LLMSingleActionAgent.
  */
@@ -209,6 +214,30 @@ export interface LLMSingleActionAgentInput {
  * Class representing a single action agent using a LLMChain in LangChain.
  * Extends the BaseSingleActionAgent class and provides methods for
  * planning agent actions based on LLMChain outputs.
+ * @example
+ * ```typescript
+ * const customPromptTemplate = new CustomPromptTemplate({
+ *   tools: [new Calculator()],
+ *   inputVariables: ["input", "agent_scratchpad"],
+ * });
+ * const customOutputParser = new CustomOutputParser();
+ * const agent = new LLMSingleActionAgent({
+ *   llmChain: new LLMChain({
+ *     prompt: customPromptTemplate,
+ *     llm: new ChatOpenAI({ temperature: 0 }),
+ *   }),
+ *   outputParser: customOutputParser,
+ *   stop: ["\nObservation"],
+ * });
+ * const executor = new AgentExecutor({
+ *   agent,
+ *   tools: [new Calculator()],
+ * });
+ * const result = await executor.invoke({
+ *   input:
+ *     "Who is Olivia Wilde's boyfriend? What is his current age raised to the 0.23 power?",
+ * });
+ * ```
  */
 export class LLMSingleActionAgent extends BaseSingleActionAgent {
   lc_namespace = ["langchain", "agents"];
@@ -279,6 +308,8 @@ export interface AgentArgs {
  * @remarks This is driven by an LLMChain. The prompt in the LLMChain *must*
  * include a variable called "agent_scratchpad" where the agent can put its
  * intermediary work.
+ *
+ * @deprecated Use {@link https://js.langchain.com/docs/modules/agents/agent_types/ | new agent creation methods}.
  */
 export abstract class Agent extends BaseSingleActionAgent {
   llmChain: LLMChain;
@@ -336,7 +367,7 @@ export abstract class Agent extends BaseSingleActionAgent {
    * @returns A PromptTemplate assembled from the given tools and fields.
    * */
   static createPrompt(
-    _tools: StructuredTool[],
+    _tools: StructuredToolInterface[],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     _fields?: Record<string, any>
   ): BasePromptTemplate {
@@ -345,8 +376,8 @@ export abstract class Agent extends BaseSingleActionAgent {
 
   /** Construct an agent from an LLM and a list of tools */
   static fromLLMAndTools(
-    _llm: BaseLanguageModel,
-    _tools: StructuredTool[],
+    _llm: BaseLanguageModelInterface,
+    _tools: StructuredToolInterface[],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     _args?: AgentArgs
   ): Agent {
@@ -356,7 +387,7 @@ export abstract class Agent extends BaseSingleActionAgent {
   /**
    * Validate that appropriate tools are passed in
    */
-  static validateTools(_tools: StructuredTool[]): void {}
+  static validateTools(_tools: StructuredToolInterface[]): void {}
 
   _stop(): string[] {
     return [`\n${this.observationPrefix()}`];
@@ -473,7 +504,10 @@ export abstract class Agent extends BaseSingleActionAgent {
    * Load an agent from a json-like object describing it.
    */
   static async deserialize(
-    data: SerializedAgent & { llm?: BaseLanguageModel; tools?: Tool[] }
+    data: SerializedAgent & {
+      llm?: BaseLanguageModelInterface;
+      tools?: ToolInterface[];
+    }
   ): Promise<Agent> {
     switch (data._type) {
       case "zero-shot-react-description": {
